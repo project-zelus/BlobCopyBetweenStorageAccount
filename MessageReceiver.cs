@@ -1,16 +1,15 @@
-using System;
-using Microsoft.Azure.WebJobs;
-using Microsoft.Azure.WebJobs.Host;
-using Microsoft.Extensions.Logging;
-using Funcs_DataMovement.Models;
-using Newtonsoft.Json;
-using Azure.Storage.Blobs;
-using Azure.Storage.Blobs.Specialized;
-using Azure.Storage.Blobs.Models;
-using System.Threading.Tasks;
 using Azure;
-using Azure.Storage.Sas;
+using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
+using Azure.Storage.Blobs.Specialized;
+using Funcs_DataMovement.Logging;
+using Funcs_DataMovement.Models;
 using Funcs_DataMovement.Utils;
+using Microsoft.Azure.WebJobs;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
+using System;
+using System.Threading.Tasks;
 
 namespace Funcs_DataMovement
 {
@@ -31,17 +30,17 @@ namespace Funcs_DataMovement
             var destContainer = destClient.GetBlobContainerClient(fileInfo.destination);
             var destBlob = destContainer.GetBlobClient(fileInfo.fileName);
 
-            CopyBlobAsync(sourceContainer, destContainer, fileInfo.fileName).GetAwaiter().GetResult();
+            CopyBlobAsync(sourceContainer, destContainer, fileInfo, log).GetAwaiter().GetResult();
 
-            log.LogInformation($"---- Received message: {JsonConvert.SerializeObject(fileInfo)}");
-            log.LogInformation("Got message");
+            log.LoggerInfo($"---- Received message: {JsonConvert.SerializeObject(fileInfo)}", fileInfo);
+            log.LoggerInfo("Got message", fileInfo);
         }
 
 
-        private static async Task CopyBlobAsync(BlobContainerClient container, BlobContainerClient destContainer, string sourceBlobName) {
+        private static async Task CopyBlobAsync(BlobContainerClient container, BlobContainerClient destContainer, JPOFileInfo info, ILogger log) {
             try {
                 // Get the name of the first blob in the container to use as the source.
-                string blobName = sourceBlobName;
+                string blobName = info.fileName;
 
                 // Create a BlobClient representing the source blob to copy.
                 BlobClient sourceBlob = container.GetBlobClient(blobName);
@@ -56,12 +55,12 @@ namespace Funcs_DataMovement
 
                     // Get the source blob's properties and display the lease state.
                     BlobProperties sourceProperties = await sourceBlob.GetPropertiesAsync();
-                    Console.WriteLine($"Lease state: {sourceProperties.LeaseState}");
+                    log.LoggerInfo($"Lease state: {sourceProperties.LeaseState}", info);
 
                     Uri blob_sas_uri = BlobUtilities.GetServiceSASUriForBlob(sourceBlob, container.Name, null);
 
                     // Get a BlobClient representing the destination blob
-                    BlobClient destBlob = destContainer.GetBlobClient(sourceBlobName);//destContainer.GetBlobClient(blob_sas_uri.ToString());
+                    BlobClient destBlob = destContainer.GetBlobClient(blobName);//destContainer.GetBlobClient(blob_sas_uri.ToString());
 
                     // Start the copy operation.
                     await destBlob.StartCopyFromUriAsync(blob_sas_uri);
@@ -81,6 +80,7 @@ namespace Funcs_DataMovement
                 }
             }
             catch (RequestFailedException ex) {
+                log.LoggerError($"RequestFailedException: {ex.Message}", ex?.StackTrace, info);
                 Console.WriteLine(ex.Message);
                 Console.ReadLine();
                 throw;

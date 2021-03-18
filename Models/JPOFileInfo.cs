@@ -4,6 +4,8 @@ using System.Text;
 
 namespace Funcs_DataMovement.Models {
     public class JPOFileInfo {
+        public Guid correlationId;
+
         public string source { get; set; }  //Source Container Name
         public string destination { get; set; } //Destination Container name
         public string tags { get; set; }
